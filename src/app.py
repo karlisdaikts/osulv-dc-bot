@@ -13,7 +13,7 @@ class OsuBot(commands.Bot):
     db: Database
     lvguild: discord.Guild
     session: aiohttp.ClientSession
-    tree: discord.app_commands.CommandTree
+    # tree property is inherited from BotBase; do not redeclare here
     _on_ready_finished: bool
 
     def __init__(self):
@@ -25,7 +25,8 @@ class OsuBot(commands.Bot):
         self.db = Database()
         self._on_ready_finished = False
 
-        super().__init__(intents=intents)
+        # Provide a valid command_prefix; use when_mentioned so prefixing with a mention works for any bot
+        super().__init__(command_prefix=commands.when_mentioned, intents=intents)
 
     async def setup_hook(self):
         self.session = aiohttp.ClientSession()
@@ -85,7 +86,6 @@ class OsuBot(commands.Bot):
                 logger.info(f"Commands available in guild: {[cmd.name for cmd in guild_commands]}")
         except discord.app_commands.CommandSyncFailure as e:
             logger.error(f"Command sync failure: {e}")
-            logger.error(f"Failed commands: {e.failed_commands if hasattr(e, 'failed_commands') else 'N/A'}")
         except Exception as e:
             logger.exception(f"Failed to sync commands: {e}")
         

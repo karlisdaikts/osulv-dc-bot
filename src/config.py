@@ -1,7 +1,32 @@
 import os
+import json
+import logging
 from dotenv import load_dotenv
 
+# module logger
+logger = logging.getLogger(__name__)
+
 load_dotenv(override=True)
+
+# Helper to load mappings from a separate JSON file. Path can be set via
+# `MAPPINGS_FILE` env var, otherwise defaults to repo-root `mappings.json`.
+def _load_from_mappings_file(key: str):
+    mappings_path = os.getenv(
+        "MAPPINGS_FILE",
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "mappings.json")),
+    )
+    if not os.path.exists(mappings_path):
+        return None
+    try:
+        with open(mappings_path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except Exception as e:
+        logger.info(f"Failed to read mappings file '{mappings_path}': {e}")
+        return None
+
+    # mapping file expected to contain top-level keys: ROLES, RANK_EMOJI,
+    # USER_NEWBEST_LIMIT, ROLE_THRESHOLDS
+    return data.get(key)
 
 # Discord configuration
 if not (discord_token := os.getenv("DISCORD_TOKEN")):
@@ -34,87 +59,131 @@ DATABASE_URL = (
 POST_REQUEST_URL = os.getenv("POST_REQUEST_URL")
 POST_REQUEST_TOKEN = os.getenv("POST_REQUEST_TOKEN")
 
-# role ids for rank roles
-ROLES = {
-    "LV1": 202057149860282378,
-    "LV5": 202061474213003265,
-    "LV10": 202061507037495296,
-    "LV25": 202061546787045377,
-    "LV50": 202061582006485002,
-    "LV100": 202061613644251136,
-    "LV250": 297854952435351552,
-    "LV500": 915646723588751391,
-    "LV1000": 915647090581966858,
-    "LVinf": 915647192755212289,
-    "restricted": 348195423841943564,
-    "inactive": 964604143912255509,
-}
+# Role ids for rank roles. Try `ROLES_JSON` env var first, then mappings file.
+_roles_env = os.getenv("ROLES_JSON")
+if not _roles_env:
+    _roles_env = _load_from_mappings_file("ROLES")
+
+if _roles_env:
+    try:
+        if isinstance(_roles_env, str):
+            roles_obj = json.loads(_roles_env)
+        else:
+            roles_obj = _roles_env
+        ROLES = {k: int(v) for k, v in roles_obj.items()}
+    except Exception as e:
+        raise ValueError(f"Invalid ROLES JSON provided (env or file): {e}")
+else:
+    logger.info("No role mappings configured (no ROLES_JSON env and no mappings file)")
+    ROLES = {}
 
 REV_ROLES = dict((v, k) for k, v in ROLES.items())
 ROLES_VALUE = dict((key, count) for count, key in enumerate(ROLES.keys()))
 
-# id of role to assign for access to nsfw channel
-PERVERT_ROLE = 141542874301988864
+# Single-value settings that can be provided via .env.
+_pervert_role_env = os.getenv("PERVERT_ROLE")
+if _pervert_role_env:
+    try:
+        PERVERT_ROLE = int(_pervert_role_env)
+    except ValueError:
+        raise ValueError("PERVERT_ROLE must be an integer role id")
+else:
+    # No pervert role configured in env
+    logger.info("PERVERT_ROLE not configured; PERVERT_ROLE set to None")
+    PERVERT_ROLE = None
 
-BOT_SELF_ID = 442370931772358666  # bot's discord id
+# bot's discord id
+_bot_self_env = os.getenv("BOT_SELF_ID")
+if _bot_self_env:
+    try:
+        BOT_SELF_ID = int(_bot_self_env)
+    except ValueError:
+        raise ValueError("BOT_SELF_ID must be an integer id")
+else:
+    # No BOT_SELF_ID configured in env
+    logger.info("BOT_SELF_ID not configured; BOT_SELF_ID set to None")
+    BOT_SELF_ID = None
 
 # channel id where new top scores and rank change messages will be sent
-BOTSPAM_CHANNEL_ID = 266580155860779009
+_botspam_env = os.getenv("BOTSPAM_CHANNEL_ID")
+if _botspam_env:
+    try:
+        BOTSPAM_CHANNEL_ID = int(_botspam_env)
+    except ValueError:
+        raise ValueError("BOTSPAM_CHANNEL_ID must be an integer channel id")
+else:
+    # No BOTSPAM_CHANNEL_ID configured in env
+    logger.info("BOTSPAM_CHANNEL_ID not configured; BOTSPAM_CHANNEL_ID set to None")
+    BOTSPAM_CHANNEL_ID = None
 
 # pp calculator needs int value but api returns mods as 2 characters
-MODS_DICT = {
-    "NF": 1,
-    "EZ": 2,
-    "TD": 4,
-    "HD": 8,
-    "HR": 16,
-    "SD": 32,
-    "DT": 64,
-    "RL": 128,
-    "HT": 256,
-    "NC": 576,  # 512, Only set along with DoubleTime. i.e: NC only gives 576
-    "FL": 1024,
-    "AT": 2048,
-    "SO": 4096,
-    "AP": 8192,  # Autopilot
-    "PF": 16416,  # 16384, Only set along with SuddenDeath. i.e: PF only gives 16416
-}
+# Load MODS_DICT from env (MODS_DICT_JSON) or from mappings file; log if missing.
+_mods_env = os.getenv("MODS_DICT_JSON")
+if not _mods_env:
+    _mods_env = _load_from_mappings_file("MODS_DICT")
 
-# emojis for rank achieved on top score post
-RANK_EMOJI = {
-    "XH": "<:SSplus:995050710406283354>",
-    "X": "<:SS:995050712784453747>",
-    "SH": "<:Splus:995050705926762517>",
-    "S": "<:S_:995050707835166761>",
-    "A": "<:A_:995050698221813770>",
-    "B": "<:B_:995050700147015761>",
-    "C": "<:C_:995050701879267378>",
-    "D": "<:D_:995050703372439633>",
-}
+if _mods_env:
+    try:
+        if isinstance(_mods_env, str):
+            mods_obj = json.loads(_mods_env)
+        else:
+            mods_obj = _mods_env
+        MODS_DICT = {k: int(v) for k, v in mods_obj.items()}
+    except Exception as e:
+        raise ValueError(f"Invalid MODS_DICT JSON provided (env or file): {e}")
+else:
+    logger.info("MODS_DICT not provided via env or mappings file; MODS_DICT set to empty mapping")
+    MODS_DICT = {}
+
+# emojis for rank achieved on top score post. Try env then mappings file.
+_rank_emoji_env = os.getenv("RANK_EMOJI_JSON")
+if not _rank_emoji_env:
+    _rank_emoji_env = _load_from_mappings_file("RANK_EMOJI")
+
+if _rank_emoji_env:
+    try:
+        if isinstance(_rank_emoji_env, str):
+            RANK_EMOJI = json.loads(_rank_emoji_env)
+        else:
+            RANK_EMOJI = _rank_emoji_env
+    except Exception as e:
+        raise ValueError(f"Invalid RANK_EMOJI JSON provided (env or file): {e}")
+else:
+    logger.info("No rank emojis configured (no RANK_EMOJI_JSON env and no mappings file)")
+    RANK_EMOJI = {}
 
 # The personal top limit determining if a score should get posted
-USER_NEWBEST_LIMIT = {
-    "LV1": 100,
-    "LV5": 80,
-    "LV10": 60,
-    "LV25": 50,
-    "LV50": 30,
-    "LV100": 20,
-    "LV250": 15,
-    "LV500": 10,
-    "LV1000": 5,
-    "LVinf": 1,
-}
+_user_newbest_env = os.getenv("USER_NEWBEST_LIMIT_JSON")
+if not _user_newbest_env:
+    _user_newbest_env = _load_from_mappings_file("USER_NEWBEST_LIMIT")
 
-# thresholds for rank roles
-ROLE_TRESHOLDS = {
-    "LV1": 1,
-    "LV5": 5,
-    "LV10": 10,
-    "LV25": 25,
-    "LV50": 50,
-    "LV100": 100,
-    "LV250": 250,
-    "LV500": 500,
-    "LV1000": 1000,
-}
+if _user_newbest_env:
+    try:
+        if isinstance(_user_newbest_env, str):
+            ub_obj = json.loads(_user_newbest_env)
+        else:
+            ub_obj = _user_newbest_env
+        USER_NEWBEST_LIMIT = {k: int(v) for k, v in ub_obj.items()}
+    except Exception as e:
+        raise ValueError(f"Invalid USER_NEWBEST_LIMIT JSON provided (env or file): {e}")
+else:
+    logger.info("No USER_NEWBEST_LIMIT configured (no env and no mappings file)")
+    USER_NEWBEST_LIMIT = {}
+
+# thresholds for rank roles. Try env then mappings file.
+_role_thresholds_env = os.getenv("ROLE_THRESHOLDS_JSON")
+if not _role_thresholds_env:
+    _role_thresholds_env = _load_from_mappings_file("ROLE_THRESHOLDS")
+
+if _role_thresholds_env:
+    try:
+        if isinstance(_role_thresholds_env, str):
+            rt_obj = json.loads(_role_thresholds_env)
+        else:
+            rt_obj = _role_thresholds_env
+        ROLE_TRESHOLDS = {k: int(v) for k, v in rt_obj.items()}
+    except Exception as e:
+        raise ValueError(f"Invalid ROLE_THRESHOLDS JSON provided (env or file): {e}")
+else:
+    logger.info("No ROLE_THRESHOLDS configured (no env and no mappings file)")
+    ROLE_TRESHOLDS = {}

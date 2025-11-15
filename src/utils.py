@@ -144,6 +144,9 @@ async def send_rolechange_msg(
         case "unrestricted":
             desc = "ir kļuvis unrestrictots!"
             embed_color = 0x14D121
+        case _:
+            desc = "Status change not recognized."
+            embed_color = 0x808080
 
     embed = discord.Embed(description=desc, color=embed_color)
 

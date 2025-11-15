@@ -17,13 +17,13 @@ class LinkUser(commands.Cog):
         self.already_sent_messages = []
         self.link_acc.start()
 
-    def cog_unload(self):
+    async def cog_unload(self):
         self.link_acc.cancel()
 
     @tasks.loop(minutes=5)
     async def link_acc(self):
+        ctx = self.bot.get_channel(BOT_CHANNEL_ID)
         try:
-            ctx = self.bot.get_channel(BOT_CHANNEL_ID)
             async with self.bot.db.pool.acquire() as db:
                 for guild in self.bot.guilds:
                     for member in guild.members:

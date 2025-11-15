@@ -17,6 +17,10 @@ class Commands(BaseCog):
     @discord.app_commands.check(admin_or_role_check)
     async def delete(self, interaction: discord.Interaction, limit: int = 20):
 
+        if BOTSPAM_CHANNEL_ID is None:
+            await interaction.response.send_message("Bot spam channel ID is not configured.", ephemeral=True)
+            return
+
         channel = self.bot.get_channel(BOTSPAM_CHANNEL_ID)
         if not channel:
             await interaction.response.send_message("Target channel not found.", ephemeral=True)
